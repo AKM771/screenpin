@@ -2,7 +2,7 @@
 
 把图片、视频、GIF、文字钉在 Windows 屏幕上：随意改大小、吸附九宫格位置、半透明、永远置顶，右键改一切。解码自带 FFmpeg，不依赖系统解码器。
 
-[下载](../../releases) · [官网页](web/index.html) · 反馈：jjonju361999@qq.com
+[下载](https://github.com/AKM771/screenpin/releases) · 官网 https://akm771.github.io/screenpin/ · 反馈：jjonju361999@qq.com
 
 ## 有什么
 
@@ -30,4 +30,4 @@ Windows 10/11 · Python 3.11 · PyQt5 5.15 · PyAV 18（自带 FFmpeg，可 `pip
 
 ## 许可
 
-MIT（见 LICENSE）。图标素材 [Material Design Icons](https://github.com/Templarian/MaterialDesign-SVG)（Apache-2.0）。依赖 PyQt5（GPL-3/商业双许可）、PyAV（BSD-3）、PyInstaller（GPL-3+bootloader 例外）——闭源分发打包产物前自行核对各项目许可。
+GPL-3.0（见 LICENSE）。图标素材 [Material Design Icons](https://github.com/Templarian/MaterialDesign-SVG)（Apache-2.0）。依赖 PyQt5（GPL-3/商业双许可）、PyAV（BSD-3）、PyInstaller（GPL-3+bootloader 例外）——逐个点开前自行核对各项目当前 LICENSE。

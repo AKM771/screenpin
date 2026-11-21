@@ -36,9 +36,9 @@ except Exception as _e:
 
 APP_NAME = "屏幕贴图"
 VERSION = "1.7"          # 单一版本源：关于框/托盘/官网/安装程序统一从这取
-SITE_URL = "https://screenpin.pages.dev"   # 官网（开源仓库就绪前占位，改这一行全生效）
+SITE_URL = "https://akm771.github.io/screenpin/"   # 官网（GitHub Pages）
 FEEDBACK_MAIL = "jjonju361999@qq.com"
-UPDATE_API = ""           # 开源后填 releases/latest 地址（如 https://api.github.com/repos/<你>/screenpin/releases/latest）
+UPDATE_API = "https://api.github.com/repos/AKM771/screenpin/releases/latest"
 SETTINGS = {"theme": 0, "restore": 0, "autoupdate": 1}   # 主题/启动恢复(默认关)/启动检查更新(默认开)
 # 主题：中性灰/低饱和成组配色（自写，非界面截图抄袭；无渐变无发光）
 THEMES = [
