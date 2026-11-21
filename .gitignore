@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# PyInstaller 构建产物（走 Release 分发，不进源码树）
+build/
+dist/
+*.spec
+
+# 大二进制与分发包（放 GitHub Release，不进 git）
+*.exe
+*.zip
+screenpin.exe
+屏幕贴图-便携版.exe
+屏幕贴图-安装程序.exe
+web/下载/
+
+# 测试素材（用户自己的视频，不进仓库）
+test.mp4
+*.mp4
+*.mkv
+*.webm
+
+# 杂项
+.vs/
+Thumbs.db
+desktop.ini

@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>屏幕贴图 ScreenPin — 把图片和视频钉在桌面上</title>
+<meta name="description" content="Windows 桌面小工具：图片、视频、GIF、文字钉在屏幕上任意位置，改大小、调透明、占最高，右键改一切。">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f5f6;color:#1b1b1e;font:16px/1.75 -apple-system,"Segoe UI",system-ui,"Microsoft YaHei",sans-serif}
+.wrap{max-width:960px;margin:0 auto;padding:0 20px}
+a{color:#2f5596}
+a:hover{color:#1b3a78}
+header{border-bottom:1px solid #e2e2e5;background:#fff}
+.hd{display:flex;align-items:center;gap:12px;padding:14px 0}
+.hd .logo{width:34px;height:34px;background:#1b1b1e;color:#fff;display:flex;align-items:center;justify-content:center;border-radius:7px}
+.hd .logo svg{width:22px;height:22px;fill:#fff}
+.hd b{font-size:18px;letter-spacing:.3px}
+.hd .ver{font-size:13px;color:#6b6b70;border:1px solid #d9d9dd;border-radius:99px;padding:1px 9px}
+.hd .sp{flex:1}
+.hd nav a{margin-left:18px;font-size:14px;text-decoration:none;color:#44444a}
+.hero{padding:54px 0 40px}
+.hero h1{font-size:34px;line-height:1.35;margin:0 0 14px;font-weight:650}
+.hero p.lead{font-size:18px;color:#3c3c42;margin:0 0 26px;max-width:720px}
+.btn{display:inline-block;background:#1b1b1e;color:#fff;text-decoration:none;padding:11px 22px;border-radius:8px;font-size:15px;margin-right:12px}
+.btn:hover{background:#333;color:#fff}
+.btn.ghost{background:#fff;color:#1b1b1e;border:1px solid #c9c9ce}
+.btn.ghost:hover{background:#eee;color:#1b1b1e}
+.note{font-size:13.5px;color:#6b6b70;margin-top:14px}
+h2{font-size:22px;margin:46px 0 6px;font-weight:650}
+h2 .en{font-size:14px;color:#8a8a90;font-weight:400;margin-left:8px}
+.sub{color:#55555c;font-size:14.5px;margin:0 0 18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}
+.card{background:#fff;border:1px solid #e2e2e5;border-radius:10px;padding:16px 17px}
+.card .ic{width:22px;height:22px;fill:#1b1b1e;margin-bottom:8px;display:block}
+.card h3{font-size:15.5px;margin:0 0 5px;font-weight:650}
+.card p{margin:0;font-size:14px;color:#48484f;line-height:1.7}
+table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2e2e5;border-radius:10px;overflow:hidden;font-size:14.5px}
+th,td{padding:9px 14px;text-align:left;border-bottom:1px solid #ececef}
+th{background:#fafafa;font-weight:600;color:#333}
+tr:last-child td{border-bottom:0}
+kbd{font:13px/1 ui-monospace,Consolas,monospace;background:#f0f0f2;border:1px solid #d5d5da;border-bottom-width:2px;border-radius:5px;padding:3px 7px;white-space:nowrap}
+.dim{color:#77777e}
+.steps{counter-reset:s;list-style:none;padding:0;margin:0}
+.steps li{counter-increment:s;position:relative;padding:6px 0 6px 40px;font-size:15px}
+.steps li::before{content:counter(s);position:absolute;left:0;top:8px;width:24px;height:24px;border-radius:50%;background:#1b1b1e;color:#fff;font-size:13px;display:flex;align-items:center;justify-content:center}
+pre{background:#1b1b1e;color:#e8e8ea;padding:14px 16px;border-radius:10px;overflow:auto;font-size:13.5px;line-height:1.7}
+code{font-family:ui-monospace,Consolas,monospace;font-size:13.5px}
+p code,li code,td code{background:#ececef;padding:1px 6px;border-radius:4px}
+ul.plain{padding-left:20px;margin:8px 0}
+ul.plain li{margin:5px 0;font-size:14.5px;color:#3c3c42}
+footer{border-top:1px solid #e2e2e5;margin-top:52px;padding:26px 0 40px;font-size:13.5px;color:#6b6b70;background:#fff}
+footer a{color:#4a4a72}
+@media (max-width:640px){.hero h1{font-size:26px}.hd nav{display:none}}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<symbol id="i-pin" viewBox="0 0 24 24"><path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z"/></symbol>
+<symbol id="i-image" viewBox="0 0 24 24"><path d="M19,19H5V5H19M19,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3M13.96,12.29L11.21,15.83L9.25,13.47L6.5,17H17.5L13.96,12.29Z"/></symbol>
+<symbol id="i-resize" viewBox="0 0 24 24"><path d="M9,1V2H10V5H9V6H12V5H11V2H12V1M9,7C7.89,7 7,7.89 7,9V21C7,22.11 7.89,23 9,23H21C22.11,23 23,22.11 23,21V9C23,7.89 22.11,7 21,7M1,9V12H2V11H5V12H6V9H5V10H2V9M9,9H21V21H9M14,10V11H15V16H11V15H10V18H11V17H15V19H14V20H17V19H16V17H19V18H20V15H19V16H16V11H17V10"/></symbol>
+<symbol id="i-grid" viewBox="0 0 24 24"><path d="M3 11H11V3H3M5 5H9V9H5M13 21H21V13H13M15 15H19V19H15M3 21H11V13H3M5 15H9V19H5M13 3V11H21V3M19 9H15V5H19Z"/></symbol>
+<symbol id="i-opacity" viewBox="0 0 24 24"><path d="M17.66,8L12,2.35L6.34,8C4.78,9.56 4,11.64 4,13.64C4,15.64 4.78,17.75 6.34,19.31C7.9,20.87 9.95,21.66 12,21.66C14.05,21.66 16.1,20.87 17.66,19.31C19.22,17.75 20,15.64 20,13.64C20,11.64 19.22,9.56 17.66,8M6,14C6,12 6.62,10.73 7.76,9.6L12,5.27L16.24,9.65C17.38,10.77 18,12 18,14H6Z"/></symbol>
+<symbol id="i-up" viewBox="0 0 24 24"><path d="M7.41,18.41L6,17L12,11L18,17L16.59,18.41L12,13.83L7.41,18.41M7.41,12.41L6,11L12,5L18,11L16.59,12.41L12,7.83L7.41,12.41Z"/></symbol>
+<symbol id="i-camera" viewBox="0 0 24 24"><path d="M20,4H16.83L15,2H9L7.17,4H4A2,2 0 0,0 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V6A2,2 0 0,0 20,4M20,18H4V6H8.05L9.88,4H14.12L15.95,6H20V18M12,7A5,5 0 0,0 7,12A5,5 0 0,0 12,17A5,5 0 0,0 17,12A5,5 0 0,0 12,7M12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15Z"/></symbol>
+<symbol id="i-diamond" viewBox="0 0 24 24"><path d="M16,9H19L14,16M10,9H14L12,17M5,9H8L10,16M15,4H17L19,7H16M11,4H13L14,7H10M7,4H9L8,7H5M6,2L2,8L12,22L22,8L18,2H6Z"/></symbol>
+<symbol id="i-text" viewBox="0 0 24 24"><path d="M18.5,4L19.66,8.35L18.7,8.61C18.25,7.74 17.79,6.87 17.26,6.43C16.73,6 16.11,6 15.5,6H13V16.5C13,17 13,17.5 13.33,17.75C13.67,18 14.33,18 15,18V19H9V18C9.67,18 10.33,18 10.67,17.75C11,17.5 11,17 11,16.5V6H8.5C7.89,6 7.27,6 6.74,6.43C6.21,6.87 5.75,7.74 5.3,8.61L4.34,8.35L5.5,4H18.5Z"/></symbol>
+<symbol id="i-dash" viewBox="0 0 24 24"><path d="M19,5V7H15V5H19M9,5V11H5V5H9M19,13V19H15V13H19M9,17V19H5V17H9M21,3H13V9H21V3M11,3H3V13H11V3M21,11H13V21H21V11M11,15H3V21H11V15Z"/></symbol>
+<symbol id="i-key" viewBox="0 0 24 24"><path d="M4,5A2,2 0 0,0 2,7V17A2,2 0 0,0 4,19H20A2,2 0 0,0 22,17V7A2,2 0 0,0 20,5H4M4,7H20V17H4V7M5,8V10H7V8H5M8,8V10H10V8H8M11,8V10H13V8H11M14,8V10H16V8H14M17,8V10H19V8H17M5,11V13H7V11H5M8,11V13H10V11H8M11,11V13H13V11H11M14,11V13H16V11H14M17,11V13H19V11H17M8,14V16H16V14H8Z"/></symbol>
+<symbol id="i-translate" viewBox="0 0 24 24"><path d="M12.87,15.07L10.33,12.56L10.36,12.53C12.1,10.59 13.34,8.36 14.07,6H17V4H10V2H8V4H1V6H12.17C11.5,7.92 10.44,9.75 9,11.35C8.07,10.32 7.3,9.19 6.69,8H4.69C5.42,9.63 6.42,11.17 7.67,12.56L2.58,17.58L4,19L9,14L12.11,17.11L12.87,15.07M18.5,10H16.5L12,22H14L15.12,19H19.87L21,22H23L18.5,10M15.88,17L17.5,12.67L19.12,17H15.88Z"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></symbol>
+<symbol id="i-branch" viewBox="0 0 24 24"><path d="M13,14C9.64,14 8.54,15.35 8.18,16.24C9.25,16.7 10,17.76 10,19A3,3 0 0,1 7,22A3,3 0 0,1 4,19C4,17.69 4.83,16.58 6,16.17V7.83C4.83,7.42 4,6.31 4,5A3,3 0 0,1 7,2A3,3 0 0,1 10,5C10,6.31 9.17,7.42 8,7.83V13.12C8.88,12.47 10.16,12 12,12C14.67,12 15.56,10.66 15.85,9.77C14.77,9.32 14,8.25 14,7A3,3 0 0,1 17,4A3,3 0 0,1 20,7C20,8.34 19.12,9.5 17.91,9.86C17.65,11.29 16.68,14 13,14M7,18A1,1 0 0,0 6,19A1,1 0 0,0 7,20A1,1 0 0,0 8,19A1,1 0 0,0 7,18M7,4A1,1 0 0,0 6,5A1,1 0 0,0 7,6A1,1 0 0,0 8,5A1,1 0 0,0 7,4M17,6A1,1 0 0,0 16,7A1,1 0 0,0 17,8A1,1 0 0,0 18,7A1,1 0 0,0 17,6Z"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z"/></symbol>
+</svg>
+
+<header>
+  <div class="wrap hd">
+    <span class="logo"><svg viewBox="0 0 24 24"><use href="#i-pin"/></svg></span>
+    <b>屏幕贴图</b>
+    <span class="ver">v1.5</span>
+    <span class="sp"></span>
+    <nav>
+      <a href="#features">功能</a>
+      <a href="#hotkeys">热键</a>
+      <a href="#faq">说明</a>
+      <a href="#build">构建</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+<section class="hero">
+  <h1>把图片和视频钉在桌面上。</h1>
+  <p class="lead">
+    截一张图、拖一个视频进去，它就贴在屏幕角上，别的窗口照样在上面干活。
+    想多大拖多大，想多透明拖多透明，右键想改什么改什么。
+  </p>
+  <div>
+    <a class="btn" href="#build">构建 screenpin.exe</a>
+    <a class="btn ghost" href="#features">看看能干嘛</a>
+  </div>
+  <p class="note">Windows 10/11 · 单文件 exe · 便携免安装 · 界面可切中/英文</p>
+</section>
+
+<h2 id="download">下载<span class="en">Download</span></h2>
+<p class="sub">离线安装，装完不用联网。两个包内容一样，挑一个就行。</p>
+<div class="grid">
+  <div class="card">
+    <svg class="ic" viewBox="0 0 24 24"><use href="#i-download"/></svg>
+    <h3>离线安装包 · 约 77 MB（zip）</h3>
+    <p>双击选目录就装好：主程序 + 重置程序 + 卸载程序 + 快捷方式。装在你自己选的目录，不要管理员权限，带卸载。</p>
+    <p style="margin-top:10px"><a class="btn" href="%E4%B8%8B%E8%BD%BD/%E5%B1%8F%E5%B9%95%E8%B4%B4%E5%9B%BE-%E5%AE%89%E8%A3%85%E7%A8%8B%E5%BA%8F.zip">下载安装程序</a></p>
+  </div>
+  <div class="card">
+    <svg class="ic" viewBox="0 0 24 24"><use href="#i-download"/></svg>
+    <h3>便携版 · 单文件约 78 MB</h3>
+    <p>一个 exe 打包了程序和全部解码库（FFmpeg 内置），放哪都能跑，不写注册表。要绿色免安装就用这个。</p>
+    <p style="margin-top:10px"><a class="btn ghost" href="%E4%B8%8B%E8%BD%BD/%E5%B1%8F%E5%B9%95%E8%B4%B4%E5%9B%BE-%E4%BE%BF%E6%90%BA%E7%89%88.exe">下载便携版</a></p>
+  </div>
+</div>
+<p class="note">下载的是完整离线包：不带捆绑、不传数据、不夹测试图片；解压/安装后断网照常用。校验码见仓库 Release 页。</p>
+
+<h2 id="features">功能<span class="en">Features</span></h2>
+<p class="sub">都是右键菜单里能点到的东西，没有藏起来的设置页。</p>
+
+<div class="grid">
+  <div class="card">
+    <svg class="ic" viewBox="0 0 24 24"><use href="#i-image"/></svg>
+    <h3>图片、视频、GIF 都行</h3>
+    <p>mp4、mkv、webm 这类视频直接播；GIF 照常动；png/jpg 拖进来就贴上。视频解码走自带的 PyAV，不依赖系统解码器。</p>
+  </div>
+  <div class="card">
+    <svg class="ic" viewBox="0 0 24 24"><use href="#i-resize"/></svg>
+    <h3>多大你说了算</h3>
+    <p>拖右下角/左下角改大小，滚轮一档 10%，右键菜单里还有 50% 到 300% 的固定档。默认锁比例，不想锁就取消勾。</p>
+  </div>
+  <div class="card">
+    <svg class="ic" viewBox="0 0 24 24"><use href="#i-grid"/></svg>
+    <h3>九宫格预设位置</h3>
+    <p>左上角、上方、右上角、左边、居中、右边、左下角、下方、右下角，右键一选就吸过去；拖到屏幕边上松手也会自动吸。</p>
+  </div>
+  <div class="card">
+    <svg class="ic" viewBox="0 0 24 24"><use href="#i-opacity"/></svg>
+    <h3>半透明</h3>
+    <p>10% 到 100% 十档，也可以一次 ±10%。贴图半透明、右键菜单不透明，调起来不晃眼。</p>
+  </div>
+  <div class="card">
+    <svg class="ic" viewBox="0 0 24 24"><use href="#i-up"/></svg>
+    <h3>永远在最上面</h3>
+    <p>置顶是默认开着的。每 4 秒回头查一次，被别的窗口压下去就自己抢回来。</p>
+  </div>
+  <div class="card">
+    <svg class="ic" viewBox="0 0 24 24"><use href="#i-camera"/></svg>
+    <h3>临时截图，只放内存</h3>
+    <p>热键一按截整屏，贴到设定位置；最多存 16 张来回切、删、全删，全程不写盘。要留底就右键「保存临时图片」自己选目录。</p>
+  </div>
+  <div class="card">
+    <svg class="ic" viewBox="0 0 24 24"><use href="#i-diamond"/></svg>
+    <h3>关键帧动画</h3>
+    <p>给贴图打几个位置点，播放键一按，它就按时间轴平移过去——演示「这个东西从这儿挪到那儿」用的。</p>
+  </div>
+  <div class="card">
+    <svg class="ic" viewBox="0 0 24 24"><use href="#i-text"/></svg>
+    <h3>文字贴图</h3>
+    <p>新建一块字，双击改内容、字号、颜色、粗体、底色；旁边有箭头、数学、图形这些符号页，点一下就插进去。缩放贴图时字号跟着变。</p>
+  </div>
+  <div class="card">
+    <svg class="ic" viewBox="0 0 24 24"><use href="#i-dash"/></svg>
+    <h3>小面板</h3>
+    <p>左键点托盘图标（或热键）在右下角弹出一格格小任务：打开、文字、截图、穿透、置顶、中英切换、设置……下面还列着当前每个贴图，点名字激活、点 × 关掉。</p>
+  </div>
+  <div class="card">
+    <svg class="ic" viewBox="0 0 24 24"><use href="#i-key"/></svg>
+    <h3>7 个热键，全都能改</h3>
+    <p>设置里点「改」，按下你想要的组合就行，重复了会拦下来。后 4 个默认不绑定，想要再设，程序帮你记住。</p>
+  </div>
+  <div class="card">
+    <svg class="ic" viewBox="0 0 24 24"><use href="#i-translate"/></svg>
+    <h3>中文 / English</h3>
+    <p>菜单、提示、对话框、启动面板、托盘菜单都走了翻译表，设置里点一下即时切换，重启也记得。</p>
+  </div>
+  <div class="card">
+    <svg class="ic" viewBox="0 0 24 24"><use href="#i-branch"/></svg>
+    <h3>多图一起摆</h3>
+    <p>选文件可以一次多选，文件夹整个拖进来也行。托盘「多图片批量设置」勾选几个贴图，位置、透明度、大小一键统一套上，或者把勾中的全关掉。</p>
+  </div>
+  <div class="card">
+    <svg class="ic" viewBox="0 0 24 24"><use href="#i-dash"/></svg>
+    <h3>后台常驻</h3>
+    <p>关掉所有贴图程序也不退出——托盘图标、热键、小面板一直在。真退出走托盘右键或小面板的「退出」。再双击 exe 不会开第二个，文件交给已在跑的那个。</p>
+  </div>
+  <div class="card">
+    <svg class="ic" viewBox="0 0 24 24"><use href="#i-check"/></svg>
+    <h3>主题、保存、一键初始化</h3>
+    <p>设置里五套成组配色（深灰/炭黑/雾灰/石板/棕灰），选完「保存设置」落盘；改乱了点「一键初始化」，热键、主题、语言、截图设置全回出厂，配置清空重来。</p>
+  </div>
+</div>
+
+<h2 id="hotkeys">热键<span class="en">Hotkeys</span></h2>
+<p class="sub">托盘右键 → 设置，或者小面板 → 设置，逐行点「改」重新按。必须带 Ctrl / Alt / Shift / Win 之一。</p>
+
+<table>
+  <tr><th style="width:34%">功能</th><th style="width:30%">默认</th><th>说明</th></tr>
+  <tr><td>点击穿透热键</td><td><kbd>Ctrl+Alt+P</kbd></td><td>开了以后鼠标直接点穿到下层窗口，再按关掉</td></tr>
+  <tr><td>临时截图热键</td><td><kbd>Ctrl+Alt+S</kbd></td><td>截一张新的入槽并显示；已经显示就先隐藏</td></tr>
+  <tr><td>小面板热键</td><td><kbd>Ctrl+Alt+Q</kbd></td><td>弹出/收起小面板（左键点托盘图标同效）</td></tr>
+  <tr><td>保存临时图片热键</td><td class="dim">未绑定</td><td>选目录，存成带时间戳的 PNG</td></tr>
+  <tr><td>切换临时图片热键</td><td class="dim">未绑定</td><td>在存着的截图之间循环切下一张</td></tr>
+  <tr><td>删除临时图片热键</td><td class="dim">未绑定</td><td>删掉当前这张，腾出槽位</td></tr>
+  <tr><td>删除全部图片热键</td><td class="dim">未绑定</td><td>一键清空，内存全释放</td></tr>
+</table>
+
+<h2 id="faq">说明<span class="en">Notes</span></h2>
+<ul class="plain">
+  <li><b>启动老把上次的图片打开？</b>默认不会了——v1.6 起「启动时恢复上次的贴图」默认关闭，每次启动自己选文件。想让它记住就去设置里勾回来。</li>
+  <li><b>关掉贴图程序就没了？</b>没没没，只是素材关了，程序在托盘常驻：热键、截图、小面板都还能用。真退出见托盘右键「退出」。</li>
+  <li><b>更新怎么来？</b>设置里默认开「启动时检查更新」，有新版会弹提示让你去官网下；也可以手动点「检查更新」。地址开源后填进源码 <code>UPDATE_API</code>。</li>
+  <li><b>反馈：</b>jjonju361999@qq.com（设置→关于里也有）。</li>
+  <li><b>视频没画面怎么办？</b>程序优先用自带的 PyAV 解码，正常都该有画面。真碰上了看右键播放菜单的提示，多半是文件本身的编码问题，换个 mp4 试试。</li>
+  <li><b>带 DRM 的流媒体视频贴不了</b>——屏幕录制层面就被挡了，这不是本程序能绕的。</li>
+  <li><b>截图会写盘吗？</b>不会。临时截图只在内存里，关程序就没了；只有你自己点「保存」才落盘。</li>
+  <li><b>配置存在哪？</b><code>%LOCALAPPDATA%\ScreenPin\config.json</code>。记的是文件路径、锚点、关键帧、热键、主题、语言；<b>不记窗口坐标</b>——换分辨率时记了反而会把窗口甩到屏幕外。</li>
+  <li><b>点击穿透开着时右键没反应</b>是正常的，点穿了嘛。用热键或托盘关掉。</li>
+</ul>
+
+<h2 id="build">构建<span class="en">Build from source</span></h2>
+<p class="sub">源码就两个文件加一个图标，Python 3.11 + PyQt5 5.15 环境下两条命令。</p>
+
+<pre>pip install PyQt5 av pyinstaller
+cmd /c build_exe.bat        <span style="color:#8a8a90"># 产物 dist\screenpin.exe，已含 FFmpeg 解码库</span></pre>
+
+<ul class="plain">
+  <li><code>overlay.py</code> — 主程序：贴图窗口、右键菜单、热键、截图、关键帧、设置、i18n</li>
+  <li><code>av_player.py</code> — PyAV 视频后端：解码线程 + 墙钟主时钟 + Qt pull 音频</li>
+  <li><code>test_overlay.py</code> — 离屏断言 117 项（尺寸/锚点/热键/截图槽/配置…）</li>
+  <li><code>build_exe.bat</code> — 打包脚本（会先检查暂存文件齐不齐，缺模块直接报错退出）</li>
+</ul>
+
+<h2 id="license">许可证与素材来源<span class="en">License & credits</span></h2>
+<ul class="plain">
+  <li>本程序代码准备以 MIT 开源（仓库整理好后挂 LICENSE）。</li>
+  <li>图标素材：<a href="https://github.com/Templarian/MaterialDesign-SVG" rel="noopener">Material Design Icons</a>（Apache-2.0），程序图标与本页图标均取自其中，未做改动以外的加工。</li>
+  <li>依赖：PyQt5（GPL-3.0 / 商业双许可——<b>自己编译自用没问题，要闭源分发打包产物前先看一眼 Qt 的许可条款</b>）、PyAV（BSD-3）、PyInstaller（GPL-3.0 + bootloader 例外）。逐个点开前先自行核对各项目当前 LICENSE。</li>
+</ul>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    屏幕贴图 ScreenPin v1.7 · 反馈：<a href="mailto:jjonju361999@qq.com">jjonju361999@qq.com</a> ·
+    本页无外部请求，图标已内联 ·
+    <a href="#download">下载</a> · <a href="#features">功能</a> · <a href="#hotkeys">热键</a> · <a href="#build">构建</a>
+  </div>
+</footer>
+
+</body>
+</html>
