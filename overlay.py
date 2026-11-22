@@ -35,7 +35,7 @@ except Exception as _e:
     _AV_ERR = repr(_e)
 
 APP_NAME = "屏幕贴图"
-VERSION = "1.7"          # 单一版本源：关于框/托盘/官网/安装程序统一从这取
+VERSION = "1.8"          # 单一版本源：关于框/托盘/官网/安装程序统一从这取
 SITE_URL = "https://akm771.github.io/screenpin/"   # 官网（GitHub Pages）
 FEEDBACK_MAIL = "jjonju361999@qq.com"
 UPDATE_API = "https://api.github.com/repos/AKM771/screenpin/releases/latest"
@@ -86,7 +86,7 @@ HKC = {"pass": None, "shot": None, "panel": None,
        "save": None, "switch": None, "del": None, "delall": None}  # (ctrl,alt,shift,meta,vk)
 SHOT_SLOTS = 16                         # 临时截图最多同时存几张（纯内存循环）
 # —— 临时截图设置（存配置） ——
-SHOT_DEF = {"anchor": 3, "pct": 33, "opacity": 100}   # 右上、33% 屏宽、不透明
+SHOT_DEF = {"anchor": 3, "pct": 33, "opacity": 100, "cursor": 1}   # 右上、33% 屏宽、不透明、抓鼠标指针
 SHOT_CFG = dict(SHOT_DEF)
 # 文字贴图默认样式（中性灰安全组合；颜色由用户自己改）
 TXT_DEF = {"text": "双击编辑文字", "font_px": 56, "color": "#F2F2F2",
@@ -186,6 +186,7 @@ def _en_table():
         "临时截图": "Temp screenshot",
         "放置位置": "Position", "宽度": "Width",
         "不透明度 %": "Opacity %",
+        "截图时包含鼠标指针": "Include mouse cursor in screenshots",
         "界面语言": "Language", "中文": "Chinese", "English": "English",
         "无效热键（须带 Ctrl/Alt/Shift/Win）": "Invalid hotkey (needs Ctrl/Alt/Shift/Win)",
         # 运行提示
@@ -402,6 +403,7 @@ def apply_global_cfg(cfg):
         SHOT_CFG["anchor"] = max(1, min(9, int(cfg.get("shot_anchor", SHOT_DEF["anchor"]))))
         SHOT_CFG["pct"] = max(5, min(100, int(cfg.get("shot_pct", SHOT_DEF["pct"]))))
         SHOT_CFG["opacity"] = max(10, min(100, int(cfg.get("shot_opacity", SHOT_DEF["opacity"]))))
+        SHOT_CFG["cursor"] = 1 if int(cfg.get("shot_cursor", SHOT_DEF["cursor"])) else 0
     except Exception:
         SHOT_CFG.update(SHOT_DEF)
     try:
@@ -425,6 +427,7 @@ def save_config():
         data = {"overlays": [], "lang": LANG.get("code", "zh"),
                 "shot_anchor": SHOT_CFG["anchor"], "shot_pct": SHOT_CFG["pct"],
                 "shot_opacity": SHOT_CFG["opacity"],
+                "shot_cursor": int(SHOT_CFG.get("cursor", 1)),
                 "theme": int(SETTINGS.get("theme", 0)),
                 "restore": int(SETTINGS.get("restore", 0)),
                 "autoupdate": int(SETTINGS.get("autoupdate", 1))}
@@ -2484,6 +2487,25 @@ def capture_screen():
             p.end()
         if im is None or im.isNull() or im.width() < 2 or im.height() < 2:
             return None
+        # 抓鼠标指针（开关 SHOT_CFG["cursor"]；QCursor.pixmap()=Qt5.14+，抓当前真实指针）
+        if int(SHOT_CFG.get("cursor", 1)):
+            try:
+                from PyQt5.QtGui import QCursor
+                pos = QCursor.pos()
+                if len(gs) == 1:
+                    off = gs[0].geometry().topLeft()
+                else:
+                    off = vg.topLeft()
+                ox, oy = pos.x() - off.x(), pos.y() - off.y()
+                if 0 <= ox < im.width() and 0 <= oy < im.height():
+                    cur = QCursor().pixmap()
+                    if cur is not None and not cur.isNull():
+                        p2 = QPainter(im)
+                        p2.setRenderHint(QPainter.SmoothPixmapTransform)
+                        p2.drawPixmap(ox, oy, cur)
+                        p2.end()
+            except Exception:
+                pass    # 指针抓失败不影响截图本身
         return im
     except Exception:
         return None
@@ -3136,6 +3158,9 @@ def open_settings(parent=None):
         sp_o.setValue(int(SHOT_CFG["opacity"]))
         r3.addWidget(sp_o)
         lay.addLayout(r3)
+        chk_cursor = QCheckBox(D("截图时包含鼠标指针"))
+        chk_cursor.setChecked(bool(int(SHOT_CFG.get("cursor", 1))))
+        lay.addWidget(chk_cursor)
         # 主题 / 启动行为 / 更新
         lay.addWidget(QLabel("<b>" + D("个性化") + "</b>"))
         r4 = QHBoxLayout()
@@ -3189,6 +3214,7 @@ def open_settings(parent=None):
             SHOT_CFG["anchor"] = combo_a.currentIndex() + 1
             SHOT_CFG["pct"] = int(sp_w.value())
             SHOT_CFG["opacity"] = int(sp_o.value())
+            SHOT_CFG["cursor"] = 1 if chk_cursor.isChecked() else 0
             newlang = combo_l.currentData() or "zh"
             newtheme = int(combo_t.currentIndex())
             oldtheme = int(SETTINGS.get("theme", 0))
