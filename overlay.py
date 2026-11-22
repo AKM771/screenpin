@@ -37,6 +37,7 @@ except Exception as _e:
 APP_NAME = "屏幕贴图"
 VERSION = "1.8"          # 单一版本源：关于框/托盘/官网/安装程序统一从这取
 SITE_URL = "https://akm771.github.io/screenpin/"   # 官网（GitHub Pages）
+AFDIAN_URL = "https://afdian.com/a/AKM771"        # 爱发电支持页
 FEEDBACK_MAIL = "jjonju361999@qq.com"
 UPDATE_API = "https://api.github.com/repos/AKM771/screenpin/releases/latest"
 SETTINGS = {"theme": 0, "restore": 0, "autoupdate": 1}   # 主题/启动恢复(默认关)/启动检查更新(默认开)
@@ -234,6 +235,7 @@ def _en_table():
         "一键初始化": "Reset to defaults",
         "检查更新": "Check for updates",
         "打开官网": "Open website",
+        "支持开发": "Support dev",
         "发现新版本 %s": "New version %s available",
         "当前版本 %s，去官网下载最新版？": "Current %s. Open website to download?",
         "已是最新版本 %s。": "You are on the latest version %s.",
@@ -3184,7 +3186,11 @@ def open_settings(parent=None):
         b_upd.clicked.connect(lambda: check_update(manual=True))
         b_rst = QPushButton(D("一键初始化"))
         b_rst.clicked.connect(lambda: _do_reset(dlg))
+        b_afd = QPushButton(D("支持开发"))
+        b_afd.setToolTip("afdian.com/a/AKM771")
+        b_afd.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(AFDIAN_URL)))
         r5.addWidget(b_site)
+        r5.addWidget(b_afd)
         r5.addWidget(b_upd)
         r5.addWidget(b_rst)
         lay.addLayout(r5)
@@ -3478,13 +3484,17 @@ def _about(anchor_w):
         if LANG["code"] == "en":
             txt = (APP_NAME + " " + VERSION + "\n\n"
                    "Right-click changes everything; %s toggles click-through.\n"
-                   "Icon: Google Material Design Icons \"pin\" (Apache-2.0).") % (
-                HK.get("pass", "Ctrl+Alt+P"))
+                   "Icon: Google Material Design Icons \"pin\" (Apache-2.0).\n\n"
+                   "Support development: afdian.com/a/AKM771\n"
+                   "Website: %s") % (
+                HK.get("pass", "Ctrl+Alt+P"), SITE_URL)
         else:
             txt = (APP_NAME + " " + VERSION + "\n\n"
                    "右键改一切；%s 点击穿透；%s 临时截图。\n"
-                   "图标：Google Material Design Icons「pin」(Apache-2.0)。") % (
-                HK.get("pass", "Ctrl+Alt+P"), HK.get("shot", "Ctrl+Alt+S"))
+                   "图标：Google Material Design Icons「pin」(Apache-2.0)。\n\n"
+                   "支持开发（爱发电）：afdian.com/a/AKM771\n"
+                   "官网：%s") % (
+                HK.get("pass", "Ctrl+Alt+P"), HK.get("shot", "Ctrl+Alt+S"), SITE_URL)
         QMessageBox.information(anchor_w, D("关于 " + APP_NAME), txt)
     except Exception:
         pass
