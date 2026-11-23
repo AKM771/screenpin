@@ -349,7 +349,7 @@ def main():
     t.close()
 
     # ---- 新功能 v1.5：7 热键 + 截图多槽 ----
-    check("hk keys count", len(overlay.HK_KEYS) == 7, str(overlay.HK_KEYS))
+    check("hk keys count", len(overlay.HK_KEYS) == 9 and "color" in overlay.HK_KEYS and "region" in overlay.HK_KEYS, str(overlay.HK_KEYS))
     check("hk 4 new defaults empty",
           all(overlay.HK.get(k, "") == "" for k in ("save", "switch", "del", "delall")),
           str({k: overlay.HK.get(k) for k in ("save", "switch", "del", "delall")}))
@@ -487,6 +487,131 @@ def main():
     check("reset writes empty list", cfgz.get("overlays") == [], str(cfgz))
     check("reset keeps feedback/site consts",
           overlay.SITE_URL.startswith("http") and "@" in overlay.FEEDBACK_MAIL)
+
+    # ---- v1.9：取色 / 框选截图 / 旋转镜像 / 标注 ----
+    from PyQt5.QtGui import QImage as _QI, QColor as _CQ, QPainter as _QP
+    from PyQt5.QtCore import QRect as _QR
+
+    check("v19 fn: color", callable(getattr(overlay, "pick_color_under_cursor", None)))
+    check("v19 fn: region", callable(getattr(overlay, "start_region_shot", None)))
+    check("v19 fn: flatten", callable(getattr(overlay, "flatten_shot", None)))
+    check("v19 hk map", "color" in overlay._HK_FN and "region" in overlay._HK_FN,
+          str(list(overlay._HK_FN)))
+
+    # 翻转/旋转语义（像素级）
+    src = _QI(10, 4, _QI.Format_ARGB32)
+    src.fill(_CQ("#ff0000"))
+    src.setPixel(9, 0, _CQ("#0000ff").rgb())       # 右上角蓝点
+    blue, red = "#0000ff", "#ff0000"
+    out = _QI(10, 4, _QI.Format_ARGB32)
+    out.fill(Qt.transparent)
+    p = _QP(out)
+    overlay._draw_tf(p, _QR(0, 0, 10, 4), img=src, tf=1, rot=0)
+    p.end()
+    check("tf hflip", _CQ(out.pixel(0, 0)).name() == blue and _CQ(out.pixel(9, 1)).name() == red,
+          str((_CQ(out.pixel(0, 0)).name(), _CQ(out.pixel(9, 1)).name())))
+    out = _QI(10, 4, _QI.Format_ARGB32)
+    out.fill(Qt.transparent)
+    p = _QP(out)
+    overlay._draw_tf(p, _QR(0, 0, 10, 4), img=src, tf=2, rot=0)
+    p.end()
+    check("tf vflip", _CQ(out.pixel(9, 3)).name() == blue and _CQ(out.pixel(9, 0)).name() == red,
+          str((_CQ(out.pixel(9, 3)).name(), _CQ(out.pixel(9, 0)).name())))
+    out = _QI(4, 10, _QI.Format_ARGB32)             # rot=1：窗口 4×10（宽高已互换）
+    out.fill(Qt.transparent)
+    p = _QP(out)
+    overlay._draw_tf(p, _QR(0, 0, 4, 10), img=src, tf=0, rot=1)
+    p.end()
+    check("tf rot90", _CQ(out.pixel(3, 9)).name() == blue and _CQ(out.pixel(0, 0)).name() == red,
+          str((_CQ(out.pixel(3, 9)).name(), _CQ(out.pixel(0, 0)).name())))
+
+    # _tf_rot 宽高互换
+    wr = overlay.OverlayWindow()
+    wr.resize(100, 40)
+    wr.tf_rot()
+    check("tf_rot swaps size", (wr.width(), wr.height()) == (40, 100),
+          "%dx%d" % (wr.width(), wr.height()))
+    wr.tf_rot()
+    check("tf_rot back", (wr.width(), wr.height()) == (100, 40))
+    wr.close()
+
+    # 标注：归一化笔画 + flatten 合成
+    green = _QI(10, 4, _QI.Format_ARGB32)
+    green.fill(_CQ("#00ff00"))
+    wsh = overlay.ShotOverlay(green)
+    wsh.resize(40, 16)
+    wsh._strokes.append({"t": "pen", "c": "#ff0000", "w": 4, "pts": [[0.5, 0.5], [0.9, 0.5]]})
+    flat = overlay.flatten_shot_img(wsh)
+    check("annot flatten size", flat is not None and flat.width() == 10 and flat.height() == 4)
+    fc = _CQ(flat.pixel(5, 2))
+    check("annot stroke drew", fc.red() - fc.green() > 60, str(fc.name()))
+    # 保存走合成
+    import tempfile as _tf_, os as _os
+    tp = _os.path.join(_tf_.gettempdir(), "sp19_test.png")
+    oksave = overlay.flatten_shot(wsh, tp)
+    check("annot save", bool(oksave) and _os.path.exists(tp) and _os.path.getsize(tp) > 0)
+    try:
+        _os.remove(tp)
+    except Exception:
+        pass
+    # 标注开关/工具/撤销（不崩即过）
+    overlay._annot_toggle(wsh)
+    check("annot on", wsh._annot is True)
+    overlay._annot_tool(wsh, "arrow")
+    overlay._annot_undo(wsh)
+    overlay._annot_clear(wsh)
+    overlay._annot_toggle(wsh)
+    check("annot off+cleared", wsh._annot is False and wsh._strokes == [])
+    # 菜单含"变换/标注"
+    try:
+        mm = wsh.build_menu()
+
+        def collect(m):
+            out = []
+            for a in m.actions():
+                if a.text():
+                    out.append(a.text())
+                if a.menu():
+                    out += collect(a.menu())
+            return out
+        mtxt = " ".join(collect(mm))
+    except Exception as e:
+        mtxt = "ERR " + str(e)
+    check("shot menu has tf+annot", "变换" in mtxt and "开始标注" in mtxt, mtxt)
+    if wsh in overlay.overlays:
+        overlay.overlays.remove(wsh)
+
+    # 框选：构造/开合/裁剪
+    overlay.start_region_shot()
+    bx = overlay._region_box[0]
+    check("region box opens", bx is not None)
+    if bx is not None:
+        crop = bx._im.copy(_QR(1, 1, 5, 2)) if bx._im is not None and not bx._im.isNull() else None
+        check("region crop", crop is None or (crop.width() == 5 and crop.height() == 2))
+        bx.close()
+    check("region box clears", overlay._region_box[0] is None)
+
+    # 取色：跑一遍不崩（剪贴板拿到 #RRGGBB 或给出失败浮条）
+    try:
+        overlay.pick_color_under_cursor()
+        cbtxt = overlay.QApplication.clipboard().text()
+        check("color picker ran", cbtxt.startswith("#") or overlay._tip_float[0] is not None,
+              "cb=%r tip=%s" % (cbtxt, overlay._tip_float[0]))
+    except Exception as e:
+        check("color picker ran", False, str(e))
+
+    # 持久化 tf/rot
+    wo = overlay.OverlayWindow()
+    wo.source_path = "dummy19.png"
+    wo._tf = 3
+    wo._rot = 2
+    overlay.overlays.append(wo)
+    overlay.save_config()
+    cfg19 = overlay.load_config()
+    got = next((i for i in cfg19.get("overlays", []) if i.get("file") == "dummy19.png"), {})
+    check("persist tf/rot", int(got.get("tf", -1)) == 3 and int(got.get("rot", -1)) == 2, str(got))
+    overlay.overlays.remove(wo)
+    wo.close()
 
     print("\nPASS=%d FAIL=%d" % (len(PASS), len(FAIL)))
     if FAIL:

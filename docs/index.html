@@ -78,7 +78,7 @@ footer a{color:#4a4a72}
   <div class="wrap hd">
     <span class="logo"><svg viewBox="0 0 24 24"><use href="#i-pin"/></svg></span>
     <b>屏幕贴图</b>
-    <span class="ver">v1.8</span>
+    <span class="ver">v1.9</span>
     <span class="sp"></span>
     <nav>
       <a href="#features">功能</a>
@@ -156,7 +156,7 @@ footer a{color:#4a4a72}
   <div class="card">
     <svg class="ic" viewBox="0 0 24 24"><use href="#i-camera"/></svg>
     <h3>临时截图，只放内存</h3>
-    <p>热键一按截整屏（连鼠标指针一起，设置里可关），贴到设定位置；最多存 16 张来回切、删、全删，全程不写盘。要留底就右键「保存临时图片」自己选目录。</p>
+    <p>热键一按截整屏（连鼠标指针一起，设置里可关），贴到设定位置；也能框选只截一块，还能画红框/箭头/涂写/马赛克再保存。最多存 16 张来回切、删、全删，全程不写盘，要留底就右键自己选目录。</p>
   </div>
   <div class="card">
     <svg class="ic" viewBox="0 0 24 24"><use href="#i-diamond"/></svg>
@@ -212,6 +212,8 @@ footer a{color:#4a4a72}
   <tr><td>切换临时图片热键</td><td class="dim">未绑定</td><td>在存着的截图之间循环切下一张</td></tr>
   <tr><td>删除临时图片热键</td><td class="dim">未绑定</td><td>删掉当前这张，腾出槽位</td></tr>
   <tr><td>删除全部图片热键</td><td class="dim">未绑定</td><td>一键清空，内存全释放</td></tr>
+  <tr><td>取色热键</td><td class="dim">未绑定</td><td>取指针下颜色复制剪贴板（#RRGGBB）</td></tr>
+  <tr><td>框选截图热键</td><td class="dim">未绑定</td><td>拖框只截选中区域，Esc/右键取消</td></tr>
 </table>
 
 <h2 id="changelog">更新日志<span class="en">Changelog</span></h2>
@@ -219,7 +221,15 @@ footer a{color:#4a4a72}
 
 <div class="grid">
   <div class="card">
-    <h3>v1.8（当前）</h3>
+    <h3>v1.9（当前）</h3>
+    <p>
+      <b>四个新功能</b>：取色器（指针下颜色一键复制剪贴板，托盘/小面板/热键都有）·
+      框选截图（拖框只截一块，Esc 取消）· 贴图左右/上下镜像 + 旋转 90°（重启记住）·
+      临时截图标注（红框、箭头、涂写、马赛克四种笔，撤销/清空，保存时合成进 PNG）。
+    </p>
+  </div>
+  <div class="card">
+    <h3>v1.8</h3>
     <p>
       <b>截图带鼠标指针</b>：临时截图现在会把鼠标指针一起截进去，设置里可关（临时截图 → 截图时包含鼠标指针）。
       抓的是当前真实指针（自定义指针主题也对），抓不到就不画、不影响截图。
@@ -307,7 +317,7 @@ cmd /c build_exe.bat        <span style="color:#8a8a90"># 产物 dist\screenpin.
 
 <footer>
   <div class="wrap">
-    屏幕贴图 ScreenPin v1.8 · 反馈：<a href="mailto:jjonju361999@qq.com">jjonju361999@qq.com</a> ·
+    屏幕贴图 ScreenPin v1.9 · 反馈：<a href="mailto:jjonju361999@qq.com">jjonju361999@qq.com</a> ·
     本页无外部请求，图标已内联 ·
     <a href="#download">下载</a> · <a href="#features">功能</a> · <a href="#hotkeys">热键</a> · <a href="#changelog">更新日志</a> · <a href="#support">支持</a> · <a href="#build">构建</a>
   </div>

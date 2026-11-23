@@ -35,7 +35,7 @@ except Exception as _e:
     _AV_ERR = repr(_e)
 
 APP_NAME = "屏幕贴图"
-VERSION = "1.8"          # 单一版本源：关于框/托盘/官网/安装程序统一从这取
+VERSION = "1.9"          # 单一版本源：关于框/托盘/官网/安装程序统一从这取
 SITE_URL = "https://akm771.github.io/screenpin/"   # 官网（GitHub Pages）
 AFDIAN_URL = "https://afdian.com/a/AKM771"        # 爱发电支持页
 FEEDBACK_MAIL = "jjonju361999@qq.com"
@@ -78,13 +78,14 @@ MIN_W, MIN_H = 48, 48
 OPAC_STEPS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 
 # —— 全局热键（串可在「设置」里改，解析见 parse_hk；要求带修饰键） ——
-HK_KEYS = ("pass", "shot", "panel", "save", "switch", "del", "delall")
+HK_KEYS = ("pass", "shot", "panel", "save", "switch", "del", "delall", "color", "region")
 HK_DEF = {"pass": "Ctrl+Alt+P", "shot": "Ctrl+Alt+S", "panel": "Ctrl+Alt+Q",
-          # ↓ 临时截图四键：默认空 = 不绑定，用户自己在设置里按（须带修饰键）
-          "save": "", "switch": "", "del": "", "delall": ""}
+          # ↓ 临时截图四键 / 取色 / 框选：默认空 = 不绑定，用户自己在设置里按（须带修饰键）
+          "save": "", "switch": "", "del": "", "delall": "", "color": "", "region": ""}
 HK = dict(HK_DEF)                       # 当前生效（用户可改，存配置）
 HKC = {"pass": None, "shot": None, "panel": None,
-       "save": None, "switch": None, "del": None, "delall": None}  # (ctrl,alt,shift,meta,vk)
+       "save": None, "switch": None, "del": None, "delall": None,
+       "color": None, "region": None}   # (ctrl,alt,shift,meta,vk)
 SHOT_SLOTS = 16                         # 临时截图最多同时存几张（纯内存循环）
 # —— 临时截图设置（存配置） ——
 SHOT_DEF = {"anchor": 3, "pct": 33, "opacity": 100, "cursor": 1}   # 右上、33% 屏宽、不透明、抓鼠标指针
@@ -236,6 +237,29 @@ def _en_table():
         "检查更新": "Check for updates",
         "打开官网": "Open website",
         "支持开发": "Support dev",
+        "取色器": "Color picker",
+        "框选截图": "Region screenshot",
+        "取到颜色 %s（已复制）": "Picked %s (copied)",
+        "取色失败": "Color pick failed",
+        "取色热键": "Color picker hotkey",
+        "框选截图热键": "Region screenshot hotkey",
+        "变换": "Transform",
+        "旋转 90°": "Rotate 90°",
+        "左右镜像": "Flip horizontal",
+        "上下镜像": "Flip vertical",
+        "标注（红框/箭头/涂写）": "Annotate (box/arrow/scribble/mosaic)",
+        "开始标注": "Start annotating",
+        "完成标注": "Done annotating",
+        "红框": "Box",
+        "箭头": "Arrow",
+        "涂写": "Scribble",
+        "马赛克": "Mosaic",
+        "画笔颜色": "Pen color",
+        "笔画粗细": "Pen width",
+        "撤销一笔": "Undo stroke",
+        "清除全部标注": "Clear annotations",
+        "拖拽框选区域，松开即截图（Esc 取消）":
+            "Drag to select a region, release to capture (Esc cancels)",
         "发现新版本 %s": "New version %s available",
         "当前版本 %s，去官网下载最新版？": "Current %s. Open website to download?",
         "已是最新版本 %s。": "You are on the latest version %s.",
@@ -447,7 +471,9 @@ def save_config():
                     continue
                 if not o.source_path:
                     continue
-                item = {"file": o.source_path, "anchor": o.anchor}
+                item = {"file": o.source_path, "anchor": o.anchor,
+                        "tf": int(getattr(o, "_tf", 0)) & 3,
+                        "rot": int(getattr(o, "_rot", 0)) & 3}
                 kc = getattr(o, "kfc", None)
                 if kc is not None and getattr(kc, "kfs", None):
                     item["kf"] = list(kc.kfs)
@@ -769,6 +795,14 @@ class OverlayWindow(QWidget):
         self._press_pos = QPoint(0, 0)
         self._press_btn = 0
         self._drag_moved = False
+        self._tf = 0            # bit0=左右镜像 bit1=上下镜像
+        self._rot = 0           # 90° × N
+        self._annot = False
+        self._tool = "pen"
+        self._pen_c = "#E53935"
+        self._pen_w = 4
+        self._strokes = []
+        self._cur_stroke = None
         self.movie = None
         self._pix = None
         self.is_video = False
@@ -1323,6 +1357,9 @@ class OverlayWindow(QWidget):
         _menu_opacity(self, m)
         _menu_play(self, m)
         _menu_kf(self, m)
+        if (getattr(self, "kind", None) in ("image", "gif")) or \
+                (getattr(self, "is_video", False) and getattr(self, "using_av", False)):
+            _menu_tf(self, m)
         _menu_tail(self, m)
         return m
 
@@ -1402,6 +1439,21 @@ class OverlayWindow(QWidget):
         if self.click_through:
             return
         pos = ev.pos()
+        if getattr(self, "_annot", False) and ev.button() == Qt.LeftButton:
+            self._pressed = True
+            self._press_pos = pos
+            self._press_btn = ev.button()
+            self._drag_moved = False
+            self.dragging = False
+            self.resizing = False
+            self._cur_stroke = {"t": getattr(self, "_tool", "pen"),
+                                "c": getattr(self, "_pen_c", "#E53935"),
+                                "w": int(getattr(self, "_pen_w", 4)),
+                                "pts": [[pos.x() / float(max(1, self.width())),
+                                         pos.y() / float(max(1, self.height()))]]}
+            self.update()
+            ev.accept()
+            return
         r = self.rect()
         self._pressed = True
         self._press_pos = pos
@@ -1425,6 +1477,21 @@ class OverlayWindow(QWidget):
         if self.click_through:
             return
         p = ev.pos()
+        st = getattr(self, "_cur_stroke", None)
+        if st is not None and (ev.buttons() & Qt.LeftButton):
+            Wn, Hn = float(max(1, self.width())), float(max(1, self.height()))
+            nx, ny = p.x() / Wn, p.y() / Hn
+            if st["t"] == "pen":
+                if not st["pts"] or abs(nx - st["pts"][-1][0]) * Wn + abs(ny - st["pts"][-1][1]) * Hn >= 3:
+                    st["pts"].append([nx, ny])
+            else:
+                if len(st["pts"]) == 1:
+                    st["pts"].append([nx, ny])
+                else:
+                    st["pts"][1] = [nx, ny]
+            self.update()
+            ev.accept()
+            return
         if self.resizing and (ev.buttons() & Qt.LeftButton):
             g = self.start_geom
             dx = p.x() - self._press_pos.x()
@@ -1488,6 +1555,21 @@ class OverlayWindow(QWidget):
         ev.accept()
 
     def mouseReleaseEvent(self, ev):
+        if getattr(self, "_annot", False) or getattr(self, "_cur_stroke", None) is not None:
+            st = getattr(self, "_cur_stroke", None)
+            self._cur_stroke = None
+            if st is not None and len(st.get("pts", [])) >= 2:
+                self._strokes.append(st)
+            self._pressed = False
+            self.dragging = False
+            self.resizing = False
+            self._drag_moved = True     # 抑制"单击切换播放"
+            try:
+                self.update()
+            except Exception:
+                pass
+            ev.accept()
+            return
         was_drag = self.dragging
         was_res = self.resizing
         quick = (self._pressed and not was_res and not self._drag_moved and
@@ -1583,11 +1665,15 @@ class OverlayWindow(QWidget):
             text = "屏幕贴图"
         p.setRenderHint(QPainter.SmoothPixmapTransform, True)
         if show_img is not None:
-            p.drawImage(r, show_img)
+            _paint_img(p, r, self, show_img)
         elif show_pix is not None:
-            p.drawPixmap(r, show_pix, QRect(0, 0, show_pix.width(), show_pix.height()))
+            _paint_pix(p, r, self)
         else:
             p.fillRect(r, PLACE_BG)
+        if getattr(self, "_strokes", None):
+            _draw_strokes(p, self, self._strokes)
+        if getattr(self, "_cur_stroke", None):
+            _draw_strokes(p, self, [self._cur_stroke])
         label = text
         if self.kind == "shot":
             try:
@@ -1825,9 +1911,21 @@ def _hk_delall():
         fn()
 
 
+def _hk_color():
+    fn = globals().get("pick_color_under_cursor")
+    if callable(fn):
+        fn()
+
+
+def _hk_region():
+    fn = globals().get("start_region_shot")
+    if callable(fn):
+        fn()
+
+
 _HK_FN = {"pass": _hk_toggle_pass, "shot": _hk_shot, "panel": _hk_panel,
           "save": _hk_save, "switch": _hk_switch, "del": _hk_del,
-          "delall": _hk_delall}
+          "delall": _hk_delall, "color": _hk_color, "region": _hk_region}
 
 
 def _hotkey_poll():
@@ -2537,6 +2635,8 @@ class ShotOverlay(OverlayWindow):
         act(m, D("下一张临时图片"), shot_next)
         act(m, D("删除这张临时图片"), lambda: shot_delete(self))
         act(m, D("删除全部临时图片"), shot_delete_all)
+        _annot_menu(self, m)
+        _menu_tf(self, m)
         m.addSeparator()
         _menu_open(self, m)
         m.addSeparator()
@@ -2590,6 +2690,436 @@ def _append_slot(w):
             old.deleteLater()
         except Exception:
             pass
+
+
+# ================= v1.9：取色 / 框选截图 / 旋转镜像 / 标注 =================
+
+_tip_float = [None]
+
+
+def _float_tip(text, ms=2000):
+    """屏幕中央短提示（无锚点操作用；text 须已过 D()）。"""
+    try:
+        old = _tip_float[0]
+        _tip_float[0] = None
+        if old is not None:
+            try:
+                old.close()
+            except Exception:
+                pass
+        lab = QLabel(text)
+        lab.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
+        pal = lab.palette()
+        pal.setColor(lab.backgroundRole(), QColor(32, 32, 34, 240))
+        pal.setColor(lab.foregroundRole(), QColor(235, 235, 235, 255))
+        lab.setPalette(pal)
+        lab.setAutoFillBackground(True)
+        f = QFont()
+        f.setPointSize(11)
+        lab.setFont(f)
+        lab.adjustSize()
+        try:
+            scr = QApplication.primaryScreen().availableGeometry()
+            lab.move(scr.center().x() - lab.width() // 2, scr.center().y() - lab.height() // 2)
+        except Exception:
+            pass
+        lab.show()
+        _tip_float[0] = lab
+
+        def _kill(box=_tip_float, l=lab):
+            if box[0] is l:
+                box[0] = None
+            try:
+                l.close()
+            except Exception:
+                pass
+        QTimer.singleShot(ms, _kill)
+    except Exception:
+        pass
+
+
+def pick_color_under_cursor():
+    """取鼠标指针下像素颜色 → 复制 #RRGGBB 到剪贴板 + 浮条提示（无贴图也能用）。"""
+    try:
+        from PyQt5.QtGui import QCursor, QGuiApplication as G
+        pos = QCursor.pos()
+        for sc in G.screens():
+            g = sc.geometry()
+            if not g.contains(pos):
+                continue
+            im = sc.grabWindow(0).toImage()
+            if im is None or im.isNull():
+                break
+            p = pos - g.topLeft()
+            if 0 <= p.x() < im.width() and 0 <= p.y() < im.height():
+                c = im.pixelColor(p)
+                hx = "#%02X%02X%02X" % (c.red(), c.green(), c.blue())
+                QApplication.clipboard().setText(hx)
+                _float_tip(D("取到颜色 %s（已复制）") % hx)
+                return
+        _float_tip(D("取色失败"))
+    except Exception:
+        _float_tip(D("取色失败"))
+
+
+_region_box = [None]   # 当前框选会话
+
+
+def start_region_shot():
+    """全屏先截一张 → 铺快照遮罩 → 鼠标拖框 → 本地裁剪入临时截图槽。Esc/右键取消。"""
+    if _region_box[0] is not None:
+        try:
+            _region_box[0].close()
+        except Exception:
+            pass
+        _region_box[0] = None
+    try:
+        r = RegionShotBox()
+        _region_box[0] = r
+        r.show()
+        r.raise_()
+        r.activateWindow()
+    except Exception:
+        _region_box[0] = None
+        _float_tip(D("截图失败"))
+
+
+class RegionShotBox(QWidget):
+    """框选截图：整屏置顶快照 + 变暗遮罩 + 拖出高亮选区 + 尺寸提示 + 十字光标。"""
+
+    def __init__(self):
+        super().__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setCursor(Qt.CrossCursor)
+        self._im = capture_screen()          # 先截屏（不含本遮罩自己）
+        self._start = None
+        self._cur = None
+        try:
+            from PyQt5.QtGui import QGuiApplication as G
+            self.setGeometry(G.primaryScreen().virtualGeometry())
+        except Exception:
+            self.setGeometry(0, 0, 1920, 1200)
+
+    def paintEvent(self, ev):
+        p = QPainter(self)
+        if self._im is not None and not self._im.isNull():
+            p.drawImage(self.rect(), self._im)
+        else:
+            p.fillRect(self.rect(), QColor(0, 0, 0, 255))
+        p.fillRect(self.rect(), QColor(0, 0, 0, 90))   # 整体变暗（半透明黑）
+        if self._start is not None and self._cur is not None:
+            r = QRect(self._start, self._cur).normalized()
+            if self._im is not None and not self._im.isNull():
+                p.drawImage(r, self._im, QRect(r.x(), r.y(), r.width(), r.height()))  # 选区显示原亮
+            p.setPen(QPen(QColor(47, 85, 150), 2))
+            p.drawRect(r.adjusted(0, 0, -1, -1))
+            p.setPen(QColor(255, 255, 255))
+            tip = "%dx%d" % (r.width(), r.height())
+            ty = r.top() - 8 if r.top() >= 24 else r.bottom() + 18
+            p.drawText(r.left() + 1, ty, tip)
+        p.setPen(QColor(235, 235, 235))
+        p.drawText(self.rect().adjusted(0, 0, 0, -12), Qt.AlignHCenter | Qt.AlignBottom,
+                   D("拖拽框选区域，松开即截图（Esc 取消）"))
+        p.end()
+
+    def mousePressEvent(self, ev):
+        if ev.button() == Qt.LeftButton:
+            self._start = ev.pos()
+            self._cur = ev.pos()
+            self.update()
+        elif ev.button() == Qt.RightButton:
+            self.close()
+
+    def mouseMoveEvent(self, ev):
+        if self._start is not None:
+            self._cur = ev.pos()
+            self.update()
+
+    def mouseReleaseEvent(self, ev):
+        if ev.button() == Qt.LeftButton and self._start is not None:
+            r = QRect(self._start, ev.pos()).normalized()
+            self._start = None
+            self._cur = None
+            self.close()
+            if r.width() < 4 or r.height() < 4 or self._im is None or self._im.isNull():
+                _float_tip(D("截图失败"))
+                ev.accept()
+                return
+            im = self._im.copy(r)
+            if im is None or im.isNull():
+                _float_tip(D("截图失败"))
+                ev.accept()
+                return
+            w = ShotOverlay(im)
+            _append_slot(w)
+            set_shot_visible(w)
+            _apply_shot_style(w)
+            show_msg(w, D("截图已显示") + " (%d/%d)" % (_shots.index(w) + 1, len(_shots)))
+            try:
+                _mp_refresh()
+            except Exception:
+                pass
+        ev.accept()
+
+    def keyPressEvent(self, ev):
+        if ev.key() == Qt.Key_Escape:
+            self.close()
+        ev.accept()
+
+    def closeEvent(self, ev):
+        if _region_box[0] is self:
+            _region_box[0] = None
+        ev.accept()
+
+
+# ---- 旋转 / 镜像：单一实现，paintEvent 与测试共用 ----
+
+def _draw_tf(p, r, pix=None, img=None, tf=0, rot=0):
+    """镜像(tf bit0=左右 bit1=上下) + 旋转(rot 个 90°)：预变换整数坐标，DrawAt 铺满 r。
+    不用 QPainter 矩阵（offscreen 下矩阵+负宽高负坐标易失真），QImage.mirrored/transformed
+    是纯整数几何，四种组合实测方向全对。pix/img 可只给一个，pix 分支需要 pixmap。"""
+    from PyQt5.QtGui import QTransform
+    src = img if img is not None else (pix.toImage() if pix is not None else None)
+    if src is None or src.isNull():
+        return
+    if not tf and not rot:
+        if img is not None:
+            p.drawImage(r, img)
+        else:
+            p.drawPixmap(r, pix, QRect(0, 0, pix.width(), pix.height()))
+        return
+    out = src
+    if tf:
+        out = out.mirrored(bool(tf & 1), bool(tf & 2))
+    if rot:
+        out = out.transformed(QTransform().rotate(rot * 90))
+    p.drawImage(r, out)
+
+
+def _paint_pix(p, r, w):
+    _draw_tf(p, r, pix=w._pix, tf=getattr(w, "_tf", 0), rot=getattr(w, "_rot", 0))
+
+
+def _paint_img(p, r, w, show_img):
+    _draw_tf(p, r, img=show_img, tf=getattr(w, "_tf", 0), rot=getattr(w, "_rot", 0))
+
+
+def _menu_tf(w, m):
+    tsm = QMenu(D("变换"), m)
+    act(tsm, D("左右镜像"), lambda: w.tf_h())
+    act(tsm, D("上下镜像"), lambda: w.tf_v())
+    act(tsm, D("旋转 90°"), lambda: w.tf_rot())
+    m.addMenu(tsm)
+
+
+# ---- 标注（红框 / 箭头 / 涂写 / 马赛克；坐标存 0..1 归一化，缩放移动不跑偏） ----
+
+_ANNOT_TOOLS = (("box", "红框"), ("arrow", "箭头"), ("pen", "涂写"), ("mos", "马赛克"))
+
+
+def _annot_toggle(w):
+    if getattr(w, "_annot", False):
+        if getattr(w, "_cur_stroke", None) is not None:
+            w._strokes.append(w._cur_stroke)
+            w._cur_stroke = None
+        w._annot = False
+        _float_tip(D("完成标注"))
+    else:
+        w._annot = True
+        _float_tip(D("开始标注"))
+    try:
+        w.update()
+    except Exception:
+        pass
+
+
+def _annot_tool(w, key):
+    w._tool = key
+    w._annot = True                    # 选工具即进入标注
+    try:
+        w.update()
+    except Exception:
+        pass
+
+
+def _annot_color(w, hx):
+    w._pen_c = hx
+
+
+def _annot_width(w, v):
+    w._pen_w = int(v)
+
+
+def _annot_undo(w):
+    if getattr(w, "_strokes", None):
+        w._strokes.pop()
+        try:
+            w.update()
+        except Exception:
+            pass
+
+
+def _annot_clear(w):
+    if getattr(w, "_strokes", None):
+        del w._strokes[:]
+        try:
+            w.update()
+        except Exception:
+            pass
+
+
+def _annot_menu(w, m):
+    if w.kind != "shot":
+        return
+    am = QMenu(D("标注（红框/箭头/涂写）"), m)
+    state_t = D("完成标注") if getattr(w, "_annot", False) else D("开始标注")
+    act(am, state_t, lambda: _annot_toggle(w))
+    am.addSeparator()
+    for key, lab in _ANNOT_TOOLS:
+        act(am, D(lab), lambda k=key: _annot_tool(w, k),
+            checked=(getattr(w, "_tool", "pen") == key))
+    am.addSeparator()
+    cm = QMenu(D("画笔颜色"), am)
+    for hx in TXT_SWATCH:
+        act(cm, hx, lambda c=hx: _annot_color(w, c),
+            checked=(getattr(w, "_pen_c", "#E53935") == hx))
+    am.addMenu(cm)
+    wm = QMenu(D("笔画粗细"), am)
+    for ww in (2, 4, 8):
+        act(wm, "%d px" % ww, lambda v=ww: _annot_width(w, v),
+            checked=(getattr(w, "_pen_w", 4) == ww))
+    am.addMenu(wm)
+    am.addSeparator()
+    act(am, D("撤销一笔"), lambda: _annot_undo(w))
+    act(am, D("清除全部标注"), lambda: _annot_clear(w))
+    m.addMenu(am)
+
+
+def _arrow_head(c, a, b, size):
+    """朝 b 方向的箭头两撇；c=QPainter。"""
+    import math
+    from PyQt5.QtCore import QPointF
+    ang = math.atan2(b.y() - a.y(), b.x() - a.x())
+    for da in (math.pi * 0.83, -math.pi * 0.83):
+        x = b.x() + size * math.cos(ang + da)
+        y = b.y() + size * math.sin(ang + da)
+        c.drawLine(b, QPointF(x, y))
+
+
+def _draw_strokes(p, w, strokes):
+    """画标注（点位 0..1 归一化 → 换算窗口像素）。w 只要 width/height/_pix。"""
+    from PyQt5.QtGui import QPen, QPolygonF
+    from PyQt5.QtCore import QPointF as FP, QRectF
+    W, H = float(w.width()), float(w.height())
+    if W <= 0 or H <= 0:
+        return
+    smooth = True
+    for st in strokes:
+        pts = st.get("pts") or []
+        if len(pts) < 2:
+            continue
+        col = QColor(st.get("c", "#E53935"))
+        wid = int(st.get("w", 4))
+        t = st.get("t", "pen")
+        px = [FP(nx * W, ny * H) for nx, ny in pts]
+        if t == "pen":
+            p.setPen(QPen(col, wid, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+            p.setBrush(Qt.NoBrush)
+            p.drawPolyline(QPolygonF(px))
+        elif t in ("box", "arrow"):
+            p.setPen(QPen(col, wid, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+            p.setBrush(Qt.NoBrush)
+            x0, y0 = px[0].x(), px[0].y()
+            x1, y1 = px[-1].x(), px[-1].y()
+            if t == "box":
+                p.drawRect(QRectF(min(x0, x1), min(y0, y1), abs(x1 - x0), abs(y1 - y0)))
+            else:
+                a, b = px[0], px[-1]
+                p.drawLine(a, b)
+                _arrow_head(p, a, b, max(8.0, wid * 4.0))
+        elif t == "mos":
+            # 马赛克：按归一化矩形回采 _pix，缩 1/20 再放回 → 打码
+            x0, y0 = min(px[0].x(), px[-1].x()), min(px[0].y(), px[-1].y())
+            x1, y1 = max(px[0].x(), px[-1].x()), max(px[0].y(), px[-1].y())
+            rect = QRectF(x0, y0, x1 - x0, y1 - y0)
+            if rect.width() < 3 or rect.height() < 3:
+                continue
+            pix = getattr(w, "_pix", None)
+            if pix is None or pix.isNull():
+                continue
+            fx, fy = pix.width() / W, pix.height() / H
+            pr = QRect(int(rect.x() * fx), int(rect.y() * fy),
+                       max(1, int(rect.width() * fx)), max(1, int(rect.height() * fy)))
+            pr = pr.intersected(QRect(0, 0, pix.width(), pix.height()))
+            if pr.isEmpty():
+                continue
+            crop = pix.copy(pr)
+            small = crop.scaled(max(1, pr.width() // 20), max(1, pr.height() // 20),
+                                Qt.IgnoreAspectRatio, Qt.FastTransformation)
+            big = small.scaled(pr.width(), pr.height(), Qt.IgnoreAspectRatio, Qt.FastTransformation)
+            p.setRenderHint(QPainter.SmoothPixmapTransform, False)
+            p.drawPixmap(rect.toRect(), big, QRect(0, 0, big.width(), big.height()))
+            smooth = False
+    if not smooth:
+        p.setRenderHint(QPainter.SmoothPixmapTransform, True)
+
+
+def flatten_shot_img(w):
+    """把标注合成进截图原图（窗口坐标按比例映射回原分辨率）。无标注返回原图。"""
+    pix = getattr(w, "_pix", None)
+    if pix is None or pix.isNull():
+        return None
+    strokes = list(getattr(w, "_strokes", []) or [])
+    if not strokes or w.width() <= 0 or w.height() <= 0:
+        return pix.toImage()
+    out = pix.copy()
+    p = QPainter(out)
+    p.setRenderHint(QPainter.SmoothPixmapTransform, True)
+    p.scale(pix.width() / float(w.width()), pix.height() / float(w.height()))
+    _draw_strokes(p, w, strokes)
+    p.end()
+    return out.toImage()
+
+
+def flatten_shot(w, path):
+    try:
+        im = flatten_shot_img(w)
+        if im is None:
+            return w._pix.save(path, "PNG")
+        return im.save(path, "PNG")
+    except Exception:
+        try:
+            return w._pix.save(path, "PNG")
+        except Exception:
+            return False
+
+
+# ---- 方法挂到 OverlayWindow（定义时类体已结束，运行期菜单才取，安全） ----
+
+def _tf_h(self):
+    self._tf = getattr(self, "_tf", 0) ^ 1
+    self.update()
+
+
+def _tf_v(self):
+    self._tf = getattr(self, "_tf", 0) ^ 2
+    self.update()
+
+
+def _tf_rot(self):
+    self._rot = (getattr(self, "_rot", 0) + 1) & 3
+    try:
+        self.resize(self.height(), self.width())   # 90°/270° 窗口宽高互换，内容才不裁变形
+        if getattr(self, "anchor", 0) > 0:
+            self.apply_anchor()
+    except Exception:
+        pass
+    self.update()
+
+
+OverlayWindow.tf_h = _tf_h
+OverlayWindow.tf_v = _tf_v
+OverlayWindow.tf_rot = _tf_rot
 
 
 def _capture_or_warn():
@@ -2720,7 +3250,7 @@ def save_shot_async(w=None):
             name = "临时截图.png"
         path = os.path.join(d, name)
         try:
-            ok = w._pix.save(path, "PNG")
+            ok = flatten_shot(w, path)
         except Exception:
             ok = False
         show_msg(w, (D("已保存") + " " + name) if ok else D("保存失败"))
@@ -2889,6 +3419,8 @@ def build_mini_panel():
         (D("打开图片/视频…"), lambda: _pick_and_open(panel)),
         (D("新建文字贴图"), lambda: (new_text_overlay(panel), _mp_refresh())),
         (D("临时截图"), toggle_shot),
+        (D("框选截图"), start_region_shot),
+        (D("取色器"), pick_color_under_cursor),
         (D("点击穿透"), lambda: (_hk_toggle_pass(), _mp_refresh())),
         (D("全部置顶"), apply_topmost_force_all),
         (D("中英切换"), lambda: set_language("zh" if LANG["code"] == "en" else "en")),
@@ -3079,6 +3611,8 @@ def build_tray_menu():
     act(tm, D("保存临时图片…"), lambda: save_shot_async())
     act(tm, D("下一张临时图片"), shot_next)
     act(tm, D("删除全部临时图片"), shot_delete_all)
+    act(tm, D("取色器"), pick_color_under_cursor)
+    act(tm, D("框选截图"), start_region_shot)
     act(tm, D("设置"), lambda: open_settings(panel))
     tm.addSeparator()
     act(tm, D("全部置顶"), apply_topmost_force_all)
@@ -3112,7 +3646,8 @@ def open_settings(parent=None):
         _hk_rows = (("pass", D("点击穿透热键")), ("shot", D("临时截图热键")),
                     ("panel", D("小面板热键")), ("save", D("保存临时图片热键")),
                     ("switch", D("切换临时图片热键")),
-                    ("del", D("删除临时图片热键")), ("delall", D("删除全部图片热键")))
+                    ("del", D("删除临时图片热键")), ("delall", D("删除全部图片热键")),
+                    ("color", D("取色热键")), ("region", D("框选截图热键")))
         for key, lab in _hk_rows:
             r = QHBoxLayout()
             r.addWidget(QLabel(lab))
@@ -3454,6 +3989,12 @@ def _open_all(items):
             anc = 0
         if anc:
             o.set_anchor(anc)
+        try:
+            o._tf = int(it.get("tf", 0)) & 3
+            o._rot = int(it.get("rot", 0)) & 3
+            o.update()
+        except Exception:
+            pass
         # 关键帧恢复（锚点/关键帧一起恢复才有用）
         try:
             kfs = it.get("kf")
